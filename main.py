@@ -11,6 +11,13 @@ T = TypeVar('T')
 R = TypeVar('R')
 P = ParamSpec('P')
 
+class Point:
+    x: float 
+    y: float
+    
+    def __init__(self, coords: tuple[float, float] = (0, 0)) -> None:
+        self.x, self.y = coords
+
 class Vector:
     dims: np.ndarray
     origins: np.ndarray
@@ -18,8 +25,16 @@ class Vector:
     
     def __init__(self): 
         self.dims = np.array([0, 1])
-        self.origins = np.array([0, 0])
+        self.origins = np.array([0, 0]) # todo: into point
         self.len = 1
+        
+    def from_two_origins(self, from_vec: "Vector", to_vec: "Vector") -> "Vector":
+        new_vec = Vector()
+        
+        new_vec.origins = from_vec.origins
+        new_vec.dims = to_vec.origins - from_vec.origins
+        
+        return new_vec
 
     def copy(self) -> "Vector":
         ret = Vector()
@@ -28,17 +43,41 @@ class Vector:
         ret.len = self.len
         return ret
 
+    def get_scalar_len(self):
+        return np.sqrt(np.square(self.dims).sum())
+
+    def distance_to(self, point: Point): 
+        # y = kx + b
+        self_k = self.dims[1] / self.dims[0] # todo: catch zero division
+        self_b = self.origins[1] + ( -self.origins[0] * self_k )
+        
+        other_k = 1/self_k
+        other_b = point.y - other_k * point.x
+        # todo: find intersection and len
+
 class Transforms:
     """class provides basic vector transformations"""
     
     def rotate_ip(self, angle: float, transformant: Vector):
-        transform_matrix = np.array([[np.cos(angle), -np.sin(angle)],
+        transform_matrix = np.array([[np.cos(angle), np.sin(angle)],
                                      [np.sin(angle), np.cos(angle)]])
         transformant.dims = transformant.dims @ transform_matrix.T
     
     def rotate(self, angle: float, transformant: Vector):
         new_vector = transformant.copy()
         self.rotate_ip(angle, new_vector)
+        return new_vector
+
+    def move_along(self, deltas: np.ndarray, transformant: Vector) -> Vector:
+        new_vector = transformant.copy()
+        angle = np.atan(new_vector.dims[0] / new_vector.dims[1])
+        
+        # new_vector.origins[0] += deltas[0] * np.sin(tilt) + deltas[1] * np.cos(tilt)
+        # new_vector.origins[1] += deltas[0] * np.cos(tilt) + deltas[1] * np.sin(tilt)
+        transform_matrix = np.array([[np.cos(angle), np.sin(angle)],
+                                     [np.sin(angle), np.cos(angle)]])
+        
+        new_vector.origins = new_vector.origins + deltas @ transform_matrix
         return new_vector
     
 transforms = Transforms()
@@ -79,7 +118,7 @@ class Engine:
             
 class RocketBody:
     dims: list[float]
-    current_coordinates: np.ndarray
+    current_coordinates: np.ndarray 
     main_vector: Vector
     
     def __init__(self, dims:tuple[float, float] = (5, 25), weight:float = 90, tilt: float = 0) -> None:
@@ -89,6 +128,9 @@ class RocketBody:
         
         self.current_coordinates = np.array([0, 0], dtype=datatype)
         self.current_vector = transforms.rotate(tilt, Vector())
+        
+    def get_mass_centre(self): 
+        return self.current_coordinates
 
 class Rocket: 
     forces: list[Force]
@@ -125,6 +167,8 @@ class Rocket:
         for engine in self.engines:
             engine_force_vector = engine.renew_force_vector(self.body_model.current_vector)
             engine_power = engine.current_force
+            
+
             real_acceleration += engine_force_vector.dims * -1. * engine_power
 
         self.current_speed += real_acceleration * time_step 
@@ -133,15 +177,18 @@ class Rocket:
         self.body_model.current_coordinates += self.delta_coordinates
         
 def init_rocket() -> Rocket:
-    main_engine_transforms: Callable[[Vector], Vector] = lambda v: transforms.rotate(np.pi, v)
-    main_engine = Engine(2000, 600, main_engine_transforms)
+    main_engine_transforms: Callable[[Vector], Vector] = lambda v: transforms.rotate(np.pi, transforms.move_along(np.array([0, -10]), v))
+    main_engine = Engine(2000, 580, main_engine_transforms)
+
+    rotating_engine_transforms: Callable[[Vector], Vector] = lambda v: transforms.rotate(np.pi / 2, v)
+    rotating_engine = Engine(100, 100, rotating_engine_transforms)
 
     def gravity_func(force: np.ndarray, mass: float) -> np.ndarray:
         force[1] -= GRAVITY_CONST * mass
         return force
     gravity = Force(gravity_func, ["body_model.weight"])
 
-    myrocket = Rocket(forces=[gravity], engines=[main_engine], initial_tilt = 10 * (np.pi / 180))
+    myrocket = Rocket(forces=[gravity], engines=[main_engine, rotating_engine], initial_tilt = 10 * (np.pi / 180))
 
     for engine in myrocket.engines:
         engine.turn_on()
@@ -162,7 +209,7 @@ def launch_sim(screen: pygame.Surface, center_offset: tuple[int, int]):
     rocket_surface = pygame.Surface(myrocket.body_model.dims, pygame.SRCALPHA)
     rect = pygame.draw.rect(rocket_surface, "black", rocket_surface.get_rect())
     rect.center = (rocket_x, rocket_y)
-    angle = -1 * myrocket.body_model.tilt * 180 / np.pi
+    angle = myrocket.body_model.tilt * 180 / np.pi
 
     while running:
         for event in pygame.event.get():
@@ -176,7 +223,7 @@ def launch_sim(screen: pygame.Surface, center_offset: tuple[int, int]):
         rect.move_ip(*(myrocket.delta_coordinates.astype(int) * -1))
         old_center = rect.center
 
-        angle = -1 * myrocket.body_model.tilt * 180 / np.pi
+        angle = myrocket.body_model.tilt * 180 / np.pi
         rotated_surface = pygame.transform.rotate(rocket_surface, angle=angle % 360)
         rotated_rect = rotated_surface.get_rect()
         rotated_rect.center = old_center
