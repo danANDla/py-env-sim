@@ -5,7 +5,8 @@ GRAVITY_CONST = 9.81
 
 datatype = np.float32
 
-from typing import Callable, TypeVar, ParamSpec
+from typing import Callable, TypeVar, ParamSpec, Annotated
+from numpy.typing import NDArray
 
 T = TypeVar('T')
 R = TypeVar('R')
@@ -151,6 +152,8 @@ class RocketBody:
 class Rocket: 
     forces: list[Force]
     engines: list[Engine]
+    hold_inplace: bool
+    resulting_linear_acceleration: NDArray[datatype]
 
     def add_force(self, force: Force):
         self.forces.append(force)
@@ -164,14 +167,20 @@ class Rocket:
         self.prev_linear_speed = np.array([0, 0], dtype=datatype)
         self.prev_rotation_speed: float = 0.
         self.zero_vector = np.array([0, 0], dtype=datatype)
+        self.resulting_linear_acceleration = np.array([0, 0], dtype=datatype)
         
         self.body_model = RocketBody(tilt = initial_tilt)
 
         self.prev_time = 0
         self.forces = forces
         self.engines = engines
+        
+        self.hold_inplace = True
+        
+    def release(self):
+        self.hold_inplace = False
 
-    def time_step(self, time_step: float):
+    def _time_step(self, time_step: float):
         self.prev_time += time_step
 
         self.prev_linear_speed: np.ndarray = self.current_linear_speed.copy()
@@ -198,16 +207,35 @@ class Rocket:
             inertia_moment = self.body_model.dims[0] * self.body_model.dims[1] * (self.body_model.dims[0] ** 2 + self.body_model.dims[1] ** 2) / 12
             
             real_rotation_acceleration += rotation_moment / inertia_moment
+            
+        self.resulting_linear_acceleration = real_linear_acceleration
 
-        self.current_linear_speed += real_linear_acceleration * time_step 
-        self.current_rotation_speed += real_rotation_acceleration * time_step
+        if not self.hold_inplace:
+            self.current_linear_speed += real_linear_acceleration * time_step 
+            self.current_rotation_speed += real_rotation_acceleration * time_step
 
-        self.delta_coordinates = ( self.current_linear_speed * time_step + self.prev_linear_speed * time_step ) / 2
-        self.delta_angle = ( self.current_rotation_speed * time_step + self.prev_rotation_speed * time_step ) / 2
-        self.body_model.current_coordinates += self.delta_coordinates
-        self.body_model.add_tilt(self.delta_angle)
+            self.delta_coordinates = ( self.current_linear_speed * time_step + self.prev_linear_speed * time_step ) / 2
+            self.delta_angle = ( self.current_rotation_speed * time_step + self.prev_rotation_speed * time_step ) / 2
+            self.body_model.current_coordinates += self.delta_coordinates
+            self.body_model.add_tilt(self.delta_angle)
         
-def init_rocket() -> Rocket:
+class Land: 
+    vpos: float
+    def __init__(self) -> None:
+        self.vpos = 0
+        
+class SimEnvironment: 
+    rockets: NDArray[np.object_]
+    land: Land
+    def __init__(self, rockets: list[Rocket]) -> None:
+        self.rockets = np.array(rockets, dtype=Rocket)
+        
+    def time_step(self, time_step: float):
+        for rocket in self.rockets: 
+            rocket._time_step(time_step)
+        
+def init_rocket() -> SimEnvironment:
+
     main_engine_transforms: Callable[[Vector], Vector] = lambda v: transforms.rotate(np.pi, transforms.move_along(np.array([0, -10]), v))
     main_engine = Engine(200000, 58000, main_engine_transforms)
 
@@ -224,7 +252,8 @@ def init_rocket() -> Rocket:
     for engine in myrocket.engines:
         engine.turn_on()
 
-    return myrocket
+    env = SimEnvironment([ myrocket ])
+    return env
 
 
 def launch_sim(screen: pygame.Surface, center_offset: tuple[int, int]):
@@ -232,7 +261,9 @@ def launch_sim(screen: pygame.Surface, center_offset: tuple[int, int]):
     dt = 0
     fps = 60
     
-    myrocket = init_rocket()
+    env = init_rocket()
+    
+    myrocket = env.rockets[0]
     
     rocket_x = myrocket.body_model.current_coordinates[0] + center_offset[0]
     rocket_y = myrocket.body_model.current_coordinates[1] + center_offset[1]
@@ -248,9 +279,11 @@ def launch_sim(screen: pygame.Surface, center_offset: tuple[int, int]):
                 running = False
 
         dt = clock.tick(fps) / 1000 # todo
-        myrocket.time_step(dt)
+        env.time_step(dt)
         
         screen.fill("white")
+
+        pygame.draw.rect(screen, "black", (0, center_offset[1] + myrocket.body_model.dims[1], center_offset[0] * 2, center_offset[1] * 2))
         rect.move_ip(*(myrocket.delta_coordinates.astype(int) * -1))
         old_center = rect.center
 
@@ -264,6 +297,9 @@ def launch_sim(screen: pygame.Surface, center_offset: tuple[int, int]):
         
         for engine in myrocket.engines:
             engine.set_force(engine.current_force + 500)
+            
+        if myrocket.resulting_linear_acceleration[1] >= 0: 
+            myrocket.release()
 
         print(myrocket.body_model.current_coordinates)
 
