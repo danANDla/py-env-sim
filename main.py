@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 GRAVITY_CONST = 9.81
 
-datatype = np.float32
+npdtype = np.float32
 
 from typing import Callable, TypeVar, ParamSpec, Annotated
 from numpy.typing import NDArray
@@ -14,33 +14,44 @@ R = TypeVar('R')
 P = ParamSpec('P')
 
 class Point:
-    coords: np.ndarray
+    coords: NDArray[npdtype]
     
     def __init__(self, coords: tuple[float, float] = (0, 0)) -> None:
         self.coords = np.array([*coords])
+        
+    def from_array(self, coords: NDArray[npdtype]) -> "Point":
+        if len(coords) < 2:
+            raise RuntimeError("passed array contains than 2 objects")
+        self.coords = np.array([coords[0], coords[1]])
+        return self
+        
+    def copy(self) -> "Point":
+        return Point().from_array(self.coords.copy())
+    
+    def  # todo
 
 class Vector:
-    dims: np.ndarray
-    origins: np.ndarray
-    len: int
+    dims: NDArray[npdtype]
+    origins: Point
     
     def __init__(self): 
         self.dims = np.array([0, 1])
-        self.origins = np.array([0, 0]) # todo: into point
-        self.len = 1
+        self.origins = Point((0, 0)) # todo: into point
         
     def from_two_origins(self, from_vec: "Vector", to_vec: "Vector") -> "Vector":
-        new_vec = Vector()
+        # new_vec = Vector()
         
-        new_vec.origins = from_vec.origins
-        new_vec.dims = to_vec.origins - from_vec.origins # todo: reuse from_two_points
+        # new_vec.origins = from_vec.origins.copy()
+        # new_vec.dims = to_vec.origins.coords - from_vec.origins.coords # todo: reuse from_two_points
         
-        return new_vec
+        return Vector().from_two_points(from_vec.origins, to_vec.origins)
+        
+        # return new_vec
     
     def from_two_points(self, from_p: Point, to_p: Point) -> "Vector":
         new_vec = Vector()
 
-        new_vec.origins = from_p.coords
+        new_vec.origins = from_p.copy()
         new_vec.dims = to_p.coords - from_p.coords
         
         return new_vec
@@ -49,16 +60,14 @@ class Vector:
         ret = Vector()
         ret.dims = self.dims.copy()
         ret.origins = self.origins.copy()
-        ret.len = self.len
         return ret
 
     def get_scalar_len(self):
         return np.sqrt(np.square(self.dims).sum())
 
     def distance_to(self, point: Point): 
-        # y = kx + b
         self_k = self.dims[1] / self.dims[0] # todo: catch zero division
-        self_b = self.origins[1] + ( -self.origins[0] * self_k )
+        self_b = self.origins.coords[1] + ( -self.origins.coords[0] * self_k )
         
         other_k = -1/self_k
         other_b = point.coords[1] - other_k * point.coords[0]
@@ -86,12 +95,10 @@ class Transforms:
         new_vector = transformant.copy()
         angle = np.atan(new_vector.dims[0] / new_vector.dims[1])
         
-        # new_vector.origins[0] += deltas[0] * np.sin(tilt) + deltas[1] * np.cos(tilt)
-        # new_vector.origins[1] += deltas[0] * np.cos(tilt) + deltas[1] * np.sin(tilt)
         transform_matrix = np.array([[np.cos(angle), np.sin(angle)],
                                      [np.sin(angle), np.cos(angle)]])
         
-        new_vector.origins = new_vector.origins + deltas @ transform_matrix
+        new_vector.origins.coords = new_vector.origins.coords + deltas @ transform_matrix
         return new_vector
     
 transforms = Transforms()
@@ -154,8 +161,8 @@ class RocketBody:
         self.weight = weight
         self.tilt = tilt
         
-        self.current_coordinates = np.array([0, 0], dtype=datatype)
-        self.prev_coordinates = np.array([0, 0], dtype=datatype)
+        self.current_coordinates = np.array([0, 0], dtype=npdtype)
+        self.prev_coordinates = np.array([0, 0], dtype=npdtype)
         self.current_vector = transforms.rotate(tilt, Vector())
         self.prev_vector = transforms.rotate(tilt, Vector())
         
@@ -170,21 +177,21 @@ class Rocket:
     forces: list[Force]
     engines: list[Engine]
     hold_inplace: bool
-    resulting_linear_acceleration: NDArray[datatype]
+    resulting_linear_acceleration: NDArray[npdtype]
 
     def add_force(self, force: Force):
         self.forces.append(force)
 
     def __init__(self, forces: list[Force], engines: list[Engine], initial_tilt: float = 0):
         # delta movement of a rocket from prev step
-        self.delta_coordinates = np.array([0, 0], dtype=datatype) 
+        self.delta_coordinates = np.array([0, 0], dtype=npdtype) 
         self.delta_angle = 0.
-        self.current_linear_speed: np.ndarray = np.array([0, 0], dtype=datatype)
+        self.current_linear_speed: np.ndarray = np.array([0, 0], dtype=npdtype)
         self.current_rotation_speed: float = 0.
-        self.prev_linear_speed = np.array([0, 0], dtype=datatype)
+        self.prev_linear_speed = np.array([0, 0], dtype=npdtype)
         self.prev_rotation_speed: float = 0.
-        self.zero_vector = np.array([0, 0], dtype=datatype)
-        self.resulting_linear_acceleration = np.array([0, 0], dtype=datatype)
+        self.zero_vector = np.array([0, 0], dtype=npdtype)
+        self.resulting_linear_acceleration = np.array([0, 0], dtype=npdtype)
         
         self.body_model = RocketBody(tilt = initial_tilt)
 
