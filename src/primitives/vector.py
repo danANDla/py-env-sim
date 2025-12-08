@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from point import Point
+from primitives.point import Point
 
 class Vector:
     dims: NDArray[np.float128]

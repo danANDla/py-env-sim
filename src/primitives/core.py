@@ -1,6 +1,6 @@
-from transforms import *
-from point import *
-from force import *
-from vector import *
+from primitives.transforms import *
+from primitives.point import *
+from primitives.force import *
+from primitives.vector import *
 
 transforms = Transforms()

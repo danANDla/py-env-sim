@@ -1,4 +1,4 @@
-from core import Immovable
+from entities.immovable.core import Immovable
 from primitives.point import Point
 
 class Land(Immovable):

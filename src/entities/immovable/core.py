@@ -1,7 +1,6 @@
 from abc import abstractmethod
 
 from primitives.point import Point
-from land import *
 
 class Immovable:
     @abstractmethod

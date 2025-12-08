@@ -1,6 +1,8 @@
 import numpy as np
+import sys
 
-from vector import Vector
+sys.path.append("/home/mattykurlzz/itmo/cs_project/py-env-sim/src")
+from primitives.vector import Vector
 
 class Transforms:
     """class provides basic vector transformations"""
@@ -28,3 +30,15 @@ class Transforms:
             new_vector.origins.coords + deltas @ transform_matrix
         )
         return new_vector
+
+
+if __name__ == "__main__":
+    import math
+    vector = Vector()
+    print(vector.origins.coords, vector.dims)
+    transforms = Transforms()
+
+    vector = transforms.rotate(math.radians(180), vector)
+    print(vector.origins.coords, vector.dims)
+    vector = transforms.move_along(np.array([0, -10]), vector)
+    print(vector.origins.coords, vector.dims)

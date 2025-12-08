@@ -1,9 +1,11 @@
 import numpy as np
 import operator
 from numpy.typing import NDArray
+import shlex
+import math
 
 from primitives.core import transforms, Vector, Force, Point
-from engine import Engine
+from entities.engine import Engine
 
 class RocketBody:
     dims: list[float]
@@ -11,10 +13,10 @@ class RocketBody:
     # main_vector: Vector
 
     def __init__(
-        self, dims: tuple[float, float] = (5, 25), weight: float = 90, tilt: float = 0
+        self, dims: tuple[float, float] = (5, 25), mass: float = 90, tilt: float = 0
     ) -> None:
         self.dims = [dims[0], dims[1]]
-        self.weight = weight
+        self.mass = mass
         self.tilt = tilt
 
         self.current_coordinates = np.array([0, 0], dtype=np.float128)
@@ -30,18 +32,33 @@ class RocketBody:
         transforms.rotate_ip(angle, self.current_vector)
 
 class Rocket:
+    id: int
+
     forces: list[Force]
-    engines: list[Engine]
+    engines: dict[str, Engine]
+
     hold_inplace: bool
     resulting_linear_acceleration: NDArray[np.float128]
     body_model: RocketBody
 
+    ALLOWED_PARAMS = {'initial_tilt'}
+
     def add_force(self, force: Force):
         self.forces.append(force)
 
+    def add_engine(self, engine_tuple: tuple[str, Engine]):
+        self.engines[engine_tuple[0]] = engine_tuple[1]
+
+    def switch_engine(self, engine_name: str):
+        self.engines[engine_name].turn_on()
+
+    def modify_engine_force(self, engine_name: str, mod_value: float):
+        self.engines[engine_name].current_force = self.engines[engine_name].current_force + mod_value
+
     def __init__(
-        self, forces: list[Force], engines: list[Engine], initial_tilt: float = 0
+        self, id: int, forces: list[Force], mass: float = 900 , tilt: float = 0
     ):
+        self.id = id
         # delta movement of a rocket from prev step
         self.delta_coordinates = np.array([0, 0], dtype=np.float128)
         self.delta_angle = 0.0
@@ -52,11 +69,11 @@ class Rocket:
         self.zero_vector = np.array([0, 0], dtype=np.float128)
         self.resulting_linear_acceleration = np.array([0, 0], dtype=np.float128)
 
-        self.body_model = RocketBody(tilt=initial_tilt)
+        self.body_model = RocketBody(tilt=math.radians(tilt))
 
         self.prev_time = 0
         self.forces = forces
-        self.engines = engines
+        self.engines = {}
 
         self.hold_inplace = True
 
@@ -78,9 +95,9 @@ class Rocket:
             arg_list: list[float] = []
             for parameter_name in force.attribute_names:
                 arg_list.append(operator.attrgetter(parameter_name)(self))
-            real_linear_acceleration = force.update(real_linear_acceleration, *arg_list)  # type: ignore
+            real_linear_acceleration = force.update(real_linear_acceleration, *arg_list) / self.body_model.mass  # type: ignore
 
-        for engine in self.engines:
+        for engine in self.engines.values():
             engine_force_vector = engine.renew_force_vector(
                 self.body_model.current_vector
             )
@@ -88,7 +105,7 @@ class Rocket:
             force_vector = engine_force_vector.dims * -1.0 * engine_power
             force_scalar = float(np.sqrt(force_vector[0] ** 2 + force_vector[1] ** 2))
 
-            real_linear_acceleration += force_vector / self.body_model.weight
+            real_linear_acceleration += force_vector / self.body_model.mass
 
             rotation_moment = force_scalar * engine_force_vector.distance_to(
                 Point(
