@@ -293,6 +293,9 @@ class Animation:
             particle_speed = random.uniform(2, 5) * engine_power
             particle_size = random.uniform(2, 4) * self.zoom_scale
             particle_life = random.randint(20, 40)
+
+            if engine_power < 0.1:
+                break
             
             self.exhaust_particles.append({
                 'x': exhaust_x,
@@ -454,7 +457,7 @@ class Animation:
             rotated_rect.center = rocket_screen_pos
             
             # Draw exhaust particles
-            engine_power = 0.5
+            engine_power = (env.getEngineForceById(1, "engine_main")) / (2000)
             self.draw_exhaust(rocket_screen_pos, angle - 180, engine_power)
             
             # Blit the rotated rocket onto the screen
