@@ -289,14 +289,17 @@ class Animation:
         exhaust_y = rocket_screen_pos[1] - np.cos(rad_angle) * exhaust_offset
         
         for _ in range(3):
-            particle_angle = angle + random.uniform(-10, 10)
-            particle_speed = random.uniform(2, 5) * engine_power
-            particle_size = random.uniform(2, 4) * self.zoom_scale
-            particle_life = random.randint(20, 40)
+            if engine_power > 0.1:
+                particle_angle = angle + random.uniform(-10, 10)
+                particle_speed = random.uniform(2, 5) * engine_power
+                particle_size = random.uniform(2, 4) * self.zoom_scale
+                particle_life = random.randint(20, 40)
+            else:
+                particle_angle = angle + random.uniform(-10, 10)
+                particle_speed = random.uniform(2, 5) * 1
+                particle_size = random.uniform(20, 40) * self.zoom_scale
+                particle_life = random.randint(20, 40)
 
-            if engine_power < 0.1:
-                break
-            
             self.exhaust_particles.append({
                 'x': exhaust_x,
                 'y': exhaust_y,
