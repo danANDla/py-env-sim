@@ -34,7 +34,7 @@ async def make_step(nc):
     try:
         repl.do_step(f"{TICK}")
         
-        print("do step")
+        #print("do step")
 
         state_dict = repl.do_get_rocket_state("1")
         
@@ -47,10 +47,10 @@ async def make_step(nc):
 
 async def ct_state_handler(msg, nc):
     # Print the received engines message
-    print(f"[engines] Received message:")
-    print(f"  Subject: {msg.subject}")
-    print(f"  Data: {msg.data.decode()}")
-    print("-" * 40)
+    # print(f"[engines] Received message:")
+    # print(f"  Subject: {msg.subject}")
+    # print(f"  Data: {msg.data.decode()}")
+    # print("-" * 40)
     
     engine_params: dict[str, float] = json.loads(msg.data.decode())
     for engine_name in engine_params.keys():

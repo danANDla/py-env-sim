@@ -6,6 +6,7 @@ import os
 import random
 
 class Animation:
+    blown: bool = False
     def __init__(self, fps: int | str = 60) -> None:
         pygame.init()
         self.infoObject = pygame.display.Info()
@@ -81,7 +82,8 @@ class Animation:
             if any(filename.lower().endswith(ext) for ext in image_extensions):
                 try:
                     # Skip images we're already using for sprites
-                    if filename in ['rocket_sprite.png', 'ground_texture.png']:
+                    if filename in ['explosion.png', 'rocket_sprite.png', 'ground_texture.png']:
+                    # if filename in ['rocket_sprite.png', 'ground_texture.png']:
                         continue
                         
                     # Load the image
@@ -111,10 +113,12 @@ class Animation:
         """Add a static image at a specific world coordinate"""
         try:
             # Load the image
-            image = pygame.image.load(filename).convert_alpha()
+            image = pygame.image.load('./files/' + filename).convert_alpha()
+            print(1)
             
             # Get the base name without extension
             name = os.path.splitext(os.path.basename(filename))[0]
+            print(2)
             
             # Add to static images list
             self.static_images.append({
@@ -123,10 +127,11 @@ class Animation:
                 'original_image': image.copy(),  # Keep original for rotation/scaling
                 'world_x': world_x,
                 'world_y': world_y,
-                'scale': scale,
-                'angle': angle,
+                'scale': 0.4,   # Scale factor
+                'angle': 0.0,   # Rotation angle in degrees
                 'visible': True
             })
+            print(3)
             
             print(f"Added static image '{name}' at position ({world_x}, {world_y})")
             return True
@@ -288,27 +293,22 @@ class Animation:
         exhaust_x = rocket_screen_pos[0] + np.sin(rad_angle) * exhaust_offset
         exhaust_y = rocket_screen_pos[1] - np.cos(rad_angle) * exhaust_offset
         
-        for _ in range(3):
-            if engine_power > 0.1:
-                particle_angle = angle + random.uniform(-10, 10)
-                particle_speed = random.uniform(2, 5) * engine_power
-                particle_size = random.uniform(2, 4) * self.zoom_scale
-                particle_life = random.randint(20, 40)
-            else:
-                particle_angle = angle + random.uniform(-10, 10)
-                particle_speed = random.uniform(2, 5) * 1
-                particle_size = random.uniform(20, 40) * self.zoom_scale
-                particle_life = random.randint(20, 40)
+        if engine_power > 0.1:
+            for _ in range(3):
+                    particle_angle = angle + random.uniform(-10, 10)
+                    particle_speed = random.uniform(2, 5) * engine_power
+                    particle_size = random.uniform(2, 4) * self.zoom_scale
+                    particle_life = random.randint(20, 40)
 
-            self.exhaust_particles.append({
-                'x': exhaust_x,
-                'y': exhaust_y,
-                'vx': np.sin(np.radians(particle_angle)) * particle_speed,
-                'vy': -np.cos(np.radians(particle_angle)) * particle_speed,
-                'size': particle_size,
-                'life': particle_life,
-                'color': (255, random.randint(100, 200), 0)
-            })
+                    self.exhaust_particles.append({
+                        'x': exhaust_x,
+                        'y': exhaust_y,
+                        'vx': np.sin(np.radians(particle_angle)) * particle_speed,
+                        'vy': -np.cos(np.radians(particle_angle)) * particle_speed,
+                        'size': particle_size,
+                        'life': particle_life,
+                        'color': (255, random.randint(100, 200), 0)
+                    })
         
         for particle in self.exhaust_particles[:]:
             particle['x'] += particle['vx']
@@ -459,21 +459,34 @@ class Animation:
             rotated_rect = rotated_rocket.get_rect()
             rotated_rect.center = rocket_screen_pos
             
-            # Draw exhaust particles
-            engine_power = (env.getEngineForceById(1, "engine_main")) / (2000)
-            self.draw_exhaust(rocket_screen_pos, angle - 180, engine_power)
+            if myrocket.body_model.current_coordinates[1] < -10 and not self.blown:
+                self.blown = True
+                print(f"Rocket hit the point: {myrocket.body_model.current_coordinates}")
+                self.add_static_image("explosion.png", world_x=myrocket.body_model.current_coordinates[0], world_y=-5)
+            if not self.blown:
+                # Draw exhaust particles
+                engine_power = (env.getEngineForceById(1, "engine_main")) / (2000)
+                self.draw_exhaust(rocket_screen_pos, angle - 180, engine_power)
+                
+                # Blit the rotated rocket onto the screen
+                self.screen.blit(rotated_rocket, rotated_rect)
             
-            # Blit the rotated rocket onto the screen
-            self.screen.blit(rotated_rocket, rotated_rect)
-            
-            # Draw rocket shadow on ground
-            shadow_offset = 5
-            shadow_surface = pygame.Surface((scaled_width, scaled_height // 4), pygame.SRCALPHA)
-            shadow_surface.fill((0, 0, 0, 100))
-            shadow_rect = shadow_surface.get_rect()
-            shadow_rect.center = (rocket_screen_pos[0], ground_top)
-            self.screen.blit(shadow_surface, shadow_rect)
-            
+                # Draw rocket shadow on ground
+                shadow_offset = 5
+                shadow_surface = pygame.Surface((100, 10), pygame.SRCALPHA)
+                shadow_surface.fill((0, 0, 0, 100))
+                shadow_rect = shadow_surface.get_rect()
+                shadow_rect.center = (rocket_screen_pos[0], ground_top)
+                self.screen.blit(shadow_surface, shadow_rect)
+
+                # Draw rocket shadow on ground
+                shadow_offset = 5
+                shadow_surface = pygame.Surface((10, 100), pygame.SRCALPHA)
+                shadow_surface.fill((0, 0, 0, 100))
+                shadow_rect = shadow_surface.get_rect()
+                shadow_rect.center = (10, rocket_screen_pos[1])
+                self.screen.blit(shadow_surface, shadow_rect)
+
         # Draw horizon line
         if rockets:
             horizon_y = ground_top

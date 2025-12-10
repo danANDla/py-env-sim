@@ -114,7 +114,6 @@ class SimEnvironment:
                 break
         if not engined_rocket:
             raise ValueError(f"No rocket with id {id} found")
-        print(engined_rocket.engines.keys())
         if engine_name in engined_rocket.engines:
             return engined_rocket.engines[engine_name].current_force
         else:
